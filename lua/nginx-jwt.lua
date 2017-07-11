@@ -22,32 +22,74 @@ end
 
 local M = {}
 
-function M.auth(claim_specs)
-    -- require Authorization request header
-    local auth_header = ngx.var.http_Authorization
-
-    if auth_header == nil then
-        ngx.log(ngx.WARN, "No Authorization header")
-        ngx.exit(ngx.HTTP_UNAUTHORIZED)
+function M.auth(configs)
+    -- check configs type
+    if type(configs) ~= 'table' then
+        ngx.log(ngx.STDERR, "Configuration error: configs arg must be a table")
+        ngx.exit(ngx.HTTP_INTERNAL_SERVER_ERROR)
     end
 
-    ngx.log(ngx.INFO, "Authorization: " .. auth_header)
+    -- go through each configured uri and do corresponding checks
+    local request_uri = ngx.var.request_uri
+    for _, config in ipairs(configs) do
+        if string.match(request_uri, config["uri"]) ~= nil then
+            local action = config["action"]
+            if action == "pass" then
+                return
+            elseif action == "deny" or action == "redirect" then
+                claim_specs = config["claim_specs"]
+                fields = config["fields"]
+                if check_jwt(claim_specs, fields) then
+                    -- pass the check, move on
+                    return
+                else
+                    -- deny or redirect the request
+                    if action == "redirect" then
+                        local redirect_config = config["redirect_url"]
+                        -- generate redirect url depend on whether the config is a string or a function
+                        local redirect_url = (type(redirect_config) == 'string') and redirect_config or redirect_config()
+                        return ngx.redirect(redirect_url)
+                    else
+        	        ngx.exit(ngx.HTTP_UNAUTHORIZED)
+                    end
+                end
+            end
+        end
+    end
+    ngx.exit(ngx.HTTP_INTERNAL_SERVER_ERROR)
+end
 
-    -- require Bearer token
-    local _, _, token = string.find(auth_header, "Bearer%s+(.+)")
+function check_jwt(claim_specs, fields)
+    -- require Authorization request header
+    local auth_header = ngx.var.http_Authorization
+    local jwt_cookie = ngx.var.cookie_jdragwoont
+
+    if auth_header == nil and jwt_cookie == nil then
+        ngx.log(ngx.WARN, "No Authorization header")
+        return false 
+    end
+
+    -- require Bearer token or cookie
+    local token
+    if jwt_cookie ~= nil then
+        token = jwt_cookie
+    else
+        _, _, token = string.find(auth_header, "Bearer%s+(.+)")
+    end
 
     if token == nil then
         ngx.log(ngx.WARN, "Missing token")
-        ngx.exit(ngx.HTTP_UNAUTHORIZED)
+        return false
     end
 
     ngx.log(ngx.INFO, "Token: " .. token)
 
     -- require valid JWT
     local jwt_obj = jwt:verify(secret, token, 0)
+
     if jwt_obj.verified == false then
         ngx.log(ngx.WARN, "Invalid token: ".. jwt_obj.reason)
-        ngx.exit(ngx.HTTP_UNAUTHORIZED)
+        return false
     end
 
     ngx.log(ngx.INFO, "JWT: " .. cjson.encode(jwt_obj))
@@ -106,12 +148,17 @@ function M.auth(claim_specs)
 
         if blocking_claim ~= "" then
             ngx.log(ngx.WARN, "User did not satisfy claim: ".. blocking_claim)
-            ngx.exit(ngx.HTTP_UNAUTHORIZED)
+	    return false
         end
     end
 
     -- write the X-Auth-UserId header
-    ngx.header["X-Auth-UserId"] = jwt_obj.payload.sub
+    for _, field in pairs(fields) do
+    	ngx.header["X-"..field] = jwt_obj.payload[field]
+    end
+
+    -- pass all the checks
+    return true
 end
 
 function M.table_contains(table, item)
