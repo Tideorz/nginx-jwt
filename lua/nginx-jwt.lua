@@ -49,10 +49,19 @@ function M.auth(configs)
                         -- generate redirect url depend on whether the config is a string or a function
                         local redirect_url = (type(redirect_config) == 'string') and redirect_config or redirect_config()
                         return ngx.redirect(redirect_url)
+                     
                     else
-        	        ngx.exit(ngx.HTTP_UNAUTHORIZED)
+        	            ngx.exit(ngx.HTTP_UNAUTHORIZED)
                     end
                 end
+            elseif action == "sign" then
+                ngx.status = ngx.HTTP_OK
+                ngx.header.content_type = "application/json; charset=utf-8"  
+                local jwt_str = '{"header": {"alg": "HS256", "typ": "JWT"}, "payload": {"sub": "123", "name": "test", "admin": true}}'
+                local jwt_json_obj = cjson.decode(jwt_str)
+                local jwt_token = jwt:sign(secret, jwt_json_obj)
+                ngx.say(cjson.encode({ token = jwt_token }))
+                return ngx.exit(ngx.HTTP_OK)  
             end
         end
     end

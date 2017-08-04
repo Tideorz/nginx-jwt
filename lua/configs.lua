@@ -10,9 +10,12 @@
 -- redirect_url:   url used when redirect is needed
 -- fields:  fields that needs to be passed along in header with X- prefix
 local configs = {
-    -- config example
     {
-        uri = "^/url/pattern/",
+        uri = "^/sign/",
+        action = "sign",
+    },
+    {
+        uri = "^/verify/",
         action = "redirect",
         claim_specs = {},
         redirect_url = function () return "https://redirect.domain.com/?redirect_url="..ngx.escape_uri("https://"..ngx.var.http_host..ngx.var.request_uri) end,
