@@ -36,24 +36,22 @@ function M.auth(configs)
             local action = config["action"]
             if action == "pass" then
                 return
-            elseif action == "deny" or action == "redirect" then
+            elseif action == "verify" then
                 claim_specs = config["claim_specs"]
                 fields = config["fields"]
                 if check_jwt(claim_specs, fields) then
-                    -- deny or redirect the request
-                    if action == "redirect" then
-                        local redirect_config = config["redirect_url"]
-                        -- generate redirect url depend on whether the config is a string or a function
-                        local redirect_url = (type(redirect_config) == 'string') and redirect_config or redirect_config()
-                        return ngx.redirect(redirect_url)
-                    end
+                    -- redirect the request if jwt token is valid
+                    local redirect_config = config["redirect_url"]
+                    -- generate redirect url depend on whether the config is a string or a function
+                    local redirect_url = (type(redirect_config) == 'string') and redirect_config or redirect_config()
+                    return ngx.redirect(redirect_url)
                 else
         	        ngx.exit(ngx.HTTP_UNAUTHORIZED)
                 end
             elseif action == "sign" then
                 ngx.status = ngx.HTTP_OK
-                ngx.header.content_type = "application/json; charset=utf-8"  
-                local jwt_str = '{"header": {"alg": "HS256", "typ": "JWT"}, "payload": {"sub": "123", "name": "test", "admin": true}}'
+                ngx.req.read_body()
+                local jwt_str = ngx.req.get_body_data()
                 local jwt_json_obj = cjson.decode(jwt_str)
                 local jwt_token = jwt:sign(secret, jwt_json_obj)
                 ngx.say(cjson.encode({ token = jwt_token }))
@@ -79,7 +77,6 @@ function check_jwt(claim_specs, fields)
         token = jwt_token
     else
         _, _, token = string.find(auth_header, "Bearer%s+(.+)")
-        ngx.log(ngx.ERR, token)
     end
 
     if token == nil then
