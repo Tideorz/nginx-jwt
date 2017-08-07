@@ -40,19 +40,15 @@ function M.auth(configs)
                 claim_specs = config["claim_specs"]
                 fields = config["fields"]
                 if check_jwt(claim_specs, fields) then
-                    -- pass the check, move on
-                    return
-                else
                     -- deny or redirect the request
                     if action == "redirect" then
                         local redirect_config = config["redirect_url"]
                         -- generate redirect url depend on whether the config is a string or a function
                         local redirect_url = (type(redirect_config) == 'string') and redirect_config or redirect_config()
                         return ngx.redirect(redirect_url)
-                     
-                    else
-        	            ngx.exit(ngx.HTTP_UNAUTHORIZED)
                     end
+                else
+        	        ngx.exit(ngx.HTTP_UNAUTHORIZED)
                 end
             elseif action == "sign" then
                 ngx.status = ngx.HTTP_OK
@@ -71,25 +67,26 @@ end
 function check_jwt(claim_specs, fields)
     -- require Authorization request header
     local auth_header = ngx.var.http_Authorization
-    local jwt_cookie = ngx.var.cookie_jdragwoont
-
-    if auth_header == nil and jwt_cookie == nil then
-        ngx.log(ngx.WARN, "No Authorization header")
+    local h = ngx.req.get_headers()
+    
+    if auth_header == nil and jwt_token == nil then
         return false 
     end
 
     -- require Bearer token or cookie
     local token
-    if jwt_cookie ~= nil then
-        token = jwt_cookie
+    if jwt_token ~= nil then
+        token = jwt_token
     else
         _, _, token = string.find(auth_header, "Bearer%s+(.+)")
+        ngx.log(ngx.ERR, token)
     end
 
     if token == nil then
         ngx.log(ngx.WARN, "Missing token")
         return false
     end
+
 
     ngx.log(ngx.INFO, "Token: " .. token)
 
@@ -102,6 +99,7 @@ function check_jwt(claim_specs, fields)
     end
 
     ngx.log(ngx.INFO, "JWT: " .. cjson.encode(jwt_obj))
+
 
     -- optionally require specific claims
     if claim_specs ~= nil then
@@ -160,6 +158,7 @@ function check_jwt(claim_specs, fields)
 	    return false
         end
     end
+
 
     -- write the X-Auth-UserId header
     for _, field in pairs(fields) do

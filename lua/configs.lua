@@ -17,8 +17,8 @@ local configs = {
     {
         uri = "^/verify/",
         action = "redirect",
-        claim_specs = {},
-        redirect_url = function () return "https://redirect.domain.com/?redirect_url="..ngx.escape_uri("https://"..ngx.var.http_host..ngx.var.request_uri) end,
+        --redirect_url = function () return "https://redirect.domain.com/?redirect_url="..ngx.escape_uri("https://"..ngx.var.http_host..ngx.var.request_uri) end,
+        redirect_url = function () return "http://dev-gnpd-app11.shanghai.mintel.ad/hello_kitty.jpg"  end,
         fields = {"user_id"}
     },
     -- default to pass
