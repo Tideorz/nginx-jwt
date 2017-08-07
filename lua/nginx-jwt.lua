@@ -49,13 +49,20 @@ function M.auth(configs)
         	        ngx.exit(ngx.HTTP_UNAUTHORIZED)
                 end
             elseif action == "sign" then
-                ngx.status = ngx.HTTP_OK
                 ngx.req.read_body()
                 local jwt_str = ngx.req.get_body_data()
                 local jwt_json_obj = cjson.decode(jwt_str)
-                local jwt_token = jwt:sign(secret, jwt_json_obj)
-                ngx.say(cjson.encode({ token = jwt_token }))
-                return ngx.exit(ngx.HTTP_OK)  
+                local status, ret = pcall(function() return jwt:sign(secret, jwt_json_obj) end)
+                -- if /sign/ has error, return 400
+                if status == true then
+                    ngx.say(cjson.encode({ token = ret }))
+                    ngx.status = ngx.HTTP_OK
+                    return ngx.exit(ngx.HTTP_OK)  
+                else
+                    ngx.say(cjson.encode({ token = ret }))
+                    ngx.status = ngx.HTTP_BAD_REQUEST
+                    return ngx.exit(ngx.HTTP_BAD_REQUEST)  
+                end
             end
         end
     end
